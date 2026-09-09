@@ -1,0 +1,10 @@
+requests
+torch
+scipy
+wikipedia
+qdrant-client
+fastapi
+websockets
+uvicorn
+faster-whisper
+transformers
