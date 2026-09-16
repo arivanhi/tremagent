@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>KOMANDO — TREM-KU</title>
+  <style>
+    body{font-family:system-ui,sans-serif;margin:0;background:#081522;color:#e8f1f7}header{padding:20px 28px;background:#10283a;display:flex;gap:16px;align-items:center;justify-content:space-between}
+    input,button{padding:10px;border-radius:8px;border:1px solid #36586e}button{background:#16a085;color:#fff;font-weight:700}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;padding:24px}.card{background:#10283a;border:1px solid #24465c;border-radius:14px;padding:18px}.bad{color:#ff7675}.good{color:#55efc4}.muted{color:#9bb1bf}table{width:100%;border-collapse:collapse}td{padding:6px;border-bottom:1px solid #24465c}</style>
+</head>
+<body><header><div><strong>KOMANDO</strong><div class="muted">Fleet Command Center</div></div><div><input id="key" type="password" placeholder="Agent API key"><button id="save">Hubungkan</button></div></header><div id="status" class="muted" style="padding:18px 24px">Belum terhubung.</div><main id="fleet" class="grid"></main>
+<script>
+const key=document.querySelector('#key'),fleet=document.querySelector('#fleet'),status=document.querySelector('#status');key.value=sessionStorage.getItem('tremku-key')||'';document.querySelector('#save').onclick=()=>{sessionStorage.setItem('tremku-key',key.value);load()};
+const val=v=>v===null||v===undefined?'—':v;async function load(){try{const r=await fetch('/api/fleet',{headers:{'x-api-key':key.value}});if(!r.ok)throw new Error(`HTTP ${r.status}`);const p=await r.json();status.textContent=`Status: ${p.status} • ${new Date().toLocaleTimeString()}`;fleet.innerHTML=(p.data||[]).map(x=>`<section class="card"><h2>${x.trem_id} <span class="${x.stale?'bad':'good'}">${x.stale?'STALE':'LIVE'}</span></h2><table><tr><td>Lokasi</td><td>${val(x.location?.label)}</td></tr><tr><td>Baterai</td><td>${val(x.battery_percent)}%</td></tr><tr><td>Kecepatan</td><td>${val(x.speed_kmh)} km/h</td></tr><tr><td>Occupancy</td><td>${val(x.occupancy)}</td></tr><tr><td>Rute</td><td>${val(x.route?.route_id)}</td></tr><tr><td>ETA</td><td>${val(x.route?.eta_minutes)} menit</td></tr><tr><td>Sensor</td><td>${val(x.sensor_health?.status)}</td></tr><tr><td>Safe stop</td><td>${x.safety?.safe_to_stop?'YA':'TIDAK'}</td></tr></table></section>`).join('')||'<section class="card">Belum ada armada yang mengirim telemetri.</section>';}catch(e){status.textContent='Gagal: '+e.message;fleet.innerHTML='';}}
+setInterval(()=>{if(key.value)load()},3000);if(key.value)load();
+</script></body></html>

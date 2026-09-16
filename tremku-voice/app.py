@@ -1,3 +1,5 @@
+raise RuntimeError("app.py adalah implementasi lama. Jalankan: uvicorn service:app --host 0.0.0.0 --port 8000")
+
 import os
 import json
 import requests

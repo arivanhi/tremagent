@@ -2,7 +2,7 @@ import os
 import requests
 import json
 
-GEMINI_API_KEY = "AQ.Ab8RN6Jhuhr7lGQyWfxVUQu9nTPeWG0pX5HpeSqogrip9gqCow"
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 VLLM_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
 
 stream_payload = {

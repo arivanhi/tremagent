@@ -1,3 +1,10 @@
 /tremku-agents/node_modules
+/tremku-agents/.env
+/tremku-agents/.env.local
 /tremku-voice/tremkuenv
+/tremku-voice/.venv
 /tremku-voice/__pycache__
+/tremku-voice/static/*.mp3
+/tremku-voice/static/*.wav
+*.pyc
+*.log

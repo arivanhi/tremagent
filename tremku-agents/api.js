@@ -1,21 +1,30 @@
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const { OpenAI } = require('openai');
-
-// Mulai layanan MQTT di background
-require('./mqtt_service.js');
+const config = require('./services/config');
+const mqttService = require('./mqtt_service');
+const redisService = require('./services/redis');
+const qdrantService = require('./services/qdrant');
+const ollamaService = require('./services/ollama');
+const heartbeat = require('./services/heartbeat');
+const { RESPONSE_STYLE, cleanAssistantReply } = require('./services/response_style');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.disable('x-powered-by');
+app.use(cors({
+    origin(origin, callback) {
+        if (!origin || config.allowedOrigins.includes(origin)) return callback(null, true);
+        return callback(new Error('Origin tidak diizinkan.'));
+    },
+}));
+app.use(express.json({ limit: '256kb' }));
 
 // Inisialisasi koneksi ke Ollama/vLLM lokal
 const openai = new OpenAI({
-    baseURL: process.env.OPENAI_API_BASE || 'http://localhost:8001/v1',
-    apiKey: process.env.OPENAI_API_KEY || 'local-key',
+    baseURL: config.openaiBaseUrl,
+    apiKey: config.openaiApiKey,
 });
 
 // Mapping Agent ke daftar skill yang diizinkan sesuai PDF
@@ -23,8 +32,47 @@ const agentSkillsMap = {
     "DINUS": ["get_current_location", "search_heritage_knowledge", "check_safety_status", "update_passenger_preference"],
     "KOMANDO": ["get_fleet_telemetry", "trigger_remote_slowdown"],
     "INGAT": ["log_trip_insights"],
-    "NARA": [] // NARA murni agentic reasoning tanpa call external function
+    "NARA": []
 };
+
+const requestCounters = new Map();
+function rateLimit(req, res, next) {
+    const now = Date.now();
+    const key = req.ip;
+    const record = requestCounters.get(key) || { start: now, count: 0 };
+    if (now - record.start > 60_000) {
+        record.start = now;
+        record.count = 0;
+    }
+    record.count += 1;
+    requestCounters.set(key, record);
+    if (record.count > 60) return res.status(429).json({ error: 'Terlalu banyak permintaan.' });
+    next();
+}
+
+function requireApiKey(req, res, next) {
+    if (!config.apiKey) return res.status(503).json({ error: 'AGENT_API_KEY belum dikonfigurasi.' });
+    const provided = req.get('x-api-key') || String(req.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    if (provided !== config.apiKey) return res.status(401).json({ error: 'API key tidak valid.' });
+    next();
+}
+
+app.use(rateLimit);
+
+app.get('/health', async (_req, res) => {
+    const [redis, qdrant, ollama] = await Promise.all([
+        redisService.status(),
+        qdrantService.status(),
+        ollamaService.status(),
+    ]);
+    const mqtt = mqttService.getServiceStatus();
+    const healthy = redis.ok && qdrant.ok && ollama.ok && mqtt.connected;
+    res.status(healthy ? 200 : 503).json({ status: healthy ? 'ok' : 'degraded', services: { mqtt, redis, qdrant, ollama } });
+});
+
+app.get('/dashboard', (_req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
+app.get('/api/fleet', requireApiKey, (_req, res) => res.json(mqttService.getFleetStatus()));
+app.get('/api/safety/:tremId', requireApiKey, (req, res) => res.json(mqttService.getSafetyStatus(req.params.tremId)));
 
 // Fungsi helper untuk memuat fungsi dari folder skills
 function getToolsForAgent(agentName) {
@@ -52,12 +100,16 @@ function getToolsForAgent(agentName) {
 }
 
 // Endpoint utama untuk mengobrol dengan Agen
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', requireApiKey, async (req, res) => {
     try {
-        const { agent, message, history = [] } = req.body;
+        const { agent, message, history = [] } = req.body || {};
 
         if (!agent || !message) {
             return res.status(400).json({ error: "Parameter 'agent' dan 'message' wajib diisi." });
+        }
+
+        if (typeof agent !== 'string' || typeof message !== 'string' || message.length > 8000 || !Array.isArray(history)) {
+            return res.status(400).json({ error: 'Format request tidak valid.' });
         }
 
         const agentName = agent.toUpperCase();
@@ -70,91 +122,65 @@ app.post('/api/chat', async (req, res) => {
         const agentSoul = fs.readFileSync(soulFilePath, 'utf-8');
         const { tools, functionRefs } = getToolsForAgent(agentName);
 
-        // Menyusun prompt
-        let messages = [
-            { role: "system", content: agentSoul },
-            ...history,
+        const safeHistory = history
+            .filter((item) => item && ['user', 'assistant'].includes(item.role) && typeof item.content === 'string')
+            .slice(-20)
+            .map((item) => ({ role: item.role, content: item.content.slice(0, 8000) }));
+        const messages = [
+            { role: "system", content: `${agentSoul}\n\n${RESPONSE_STYLE}` },
+            ...safeHistory,
             { role: "user", content: message }
         ];
-
-        console.log(`\n[API] Memproses permintaan untuk agen: ${agentName}`);
-        
-        let apiPayload = {
-            model: process.env.OPENCLAW_MODEL || 'qwen',
-            messages: messages,
-            max_tokens: 2048,
-            temperature: 0.7
-        };
-
-        if (tools.length > 0) {
-            apiPayload.tools = tools;
-            apiPayload.tool_choice = "auto";
-        }
-
-        // 1. Kirim pesan ke LLM
-        const response = await openai.chat.completions.create(apiPayload);
-        const responseMessage = response.choices[0].message;
-
-        // 2. Periksa apakah agen memutuskan untuk menggunakan tool
-        if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
-            console.log(`[🤖 ACTION] Agen ${agentName} memanggil ${responseMessage.tool_calls.length} tool(s).`);
-            messages.push(responseMessage); // Simpan riwayat panggilan fungsi
-
-            // Eksekusi fungsi lokal
-            for (const toolCall of responseMessage.tool_calls) {
-                const funcName = toolCall.function.name;
-                if (functionRefs[funcName]) {
-                    const args = JSON.parse(toolCall.function.arguments || "{}");
-                    console.log(`[⚙️ SYSTEM] Mengeksekusi ${funcName} dengan argumen:`, args);
-                    
-                    const functionResult = await functionRefs[funcName](args);
-                    console.log(`[✅ SYSTEM] Hasil fungsi ${funcName}: ${functionResult}`);
-                    
-                    messages.push({
-                        tool_call_id: toolCall.id,
-                        role: "tool",
-                        name: funcName,
-                        content: functionResult
-                    });
-                }
+        let toolUsed = false;
+        for (let round = 0; round < 4; round += 1) {
+            const payload = {
+                model: config.chatModel,
+                messages,
+                max_tokens: 800,
+                temperature: agentName === 'NARA' ? 0.1 : 0.5,
+            };
+            if (tools.length) {
+                payload.tools = tools;
+                payload.tool_choice = 'auto';
+            }
+            const response = await openai.chat.completions.create(payload);
+            const responseMessage = response.choices?.[0]?.message;
+            if (!responseMessage) throw new Error('LLM tidak mengembalikan pesan.');
+            if (!responseMessage.tool_calls?.length) {
+                return res.json({
+                    agent: agentName,
+                    reply: cleanAssistantReply(responseMessage.content),
+                    tool_used: toolUsed,
+                });
             }
 
-            // 3. Minta agen merangkum jawaban akhirnya
-            console.log(`[🤖 ACTION] Agen ${agentName} merangkum jawaban akhir berdasarkan hasil tool...`);
-            const finalResponse = await openai.chat.completions.create({
-                model: process.env.OPENCLAW_MODEL || 'qwen',
-                messages: messages,
-                max_tokens: 2048,
-                temperature: 0.7
-            });
-
-            return res.json({ 
-                agent: agentName, 
-                reply: finalResponse.choices[0].message.content,
-                tool_used: true
-            });
-
-        } else {
-            // Agen membalas secara langsung tanpa tools
-            return res.json({ 
-                agent: agentName, 
-                reply: responseMessage.content,
-                tool_used: false
-            });
+            toolUsed = true;
+            messages.push(responseMessage);
+            for (const toolCall of responseMessage.tool_calls) {
+                const funcName = toolCall.function.name;
+                let content;
+                try {
+                    const args = JSON.parse(toolCall.function.arguments || '{}');
+                    content = functionRefs[funcName]
+                        ? await functionRefs[funcName](args)
+                        : JSON.stringify({ status: 'error', message: `Tool ${funcName} tidak diizinkan.` });
+                } catch (error) {
+                    content = JSON.stringify({ status: 'error', message: error.message });
+                }
+                messages.push({ tool_call_id: toolCall.id, role: 'tool', name: funcName, content });
+            }
         }
+        return res.status(422).json({ error: 'Batas putaran tool tercapai tanpa jawaban akhir.' });
 
     } catch (error) {
         console.error("[ERROR] Terjadi kesalahan:", error.message);
-        res.status(500).json({ error: "Terjadi kesalahan internal server.", details: error.message });
+        res.status(500).json({ error: "Terjadi kesalahan internal server.", request_id: req.get('x-request-id') || null });
     }
 });
 
 // Menjalankan server
-const PORT = process.env.PORT || 3100;
-app.listen(PORT, () => {
-    console.log(`========================================`);
-    console.log(`🚀 TREM-KU Agent REST API (OpenClaw Blueprint) Berjalan!`);
-    console.log(`📡 Port: ${PORT}`);
-    console.log(`🌐 Endpoint: POST http://localhost:${PORT}/api/chat`);
-    console.log(`========================================`);
+app.listen(config.port, '0.0.0.0', () => {
+    console.log(`[API] TREM-KU Agent API aktif pada port ${config.port}.`);
 });
+
+heartbeat.startHeartbeat(mqttService.getFleetStatus);

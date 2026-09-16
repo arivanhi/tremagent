@@ -1,111 +1,199 @@
+const crypto = require('crypto');
 const mqtt = require('mqtt');
+const config = require('./services/config');
 
-// Konfigurasi koneksi ke EMQX lokal
-const MQTT_BROKER_URL = 'mqtt://localhost:1883';
-const TELEMETRY_TOPIC = 'tremku/telemetry/+'; // Menerima data dari semua trem
+const TELEMETRY_TOPIC = 'tremku/telemetry/+';
+const ACK_TOPIC = 'tremku/ack/+';
 const COMMAND_TOPIC_PREFIX = 'tremku/command/';
+const fleetState = new Map();
+const pendingCommands = new Map();
+let connected = false;
+let lastError = null;
 
-// Simpan state terakhir setiap armada di memori
-const fleetState = {};
+function sensorHealth(sensors = {}) {
+    const entries = Object.entries(sensors);
+    const degraded = entries.filter(([, sensor]) => sensor?.status && sensor.status !== 'ok').map(([name]) => name);
+    return { status: degraded.length ? 'degraded' : 'ok', degraded_sensors: degraded };
+}
 
-console.log(`[MQTT] Menghubungkan ke broker EMQX di ${MQTT_BROKER_URL}...`);
-const client = mqtt.connect(MQTT_BROKER_URL, {
-    clientId: `tremku_api_server_${Math.random().toString(16).substr(2, 8)}`
+function normalizeTelemetry(payload, topicTremId) {
+    if (!payload || typeof payload !== 'object') throw new Error('Payload telemetri harus berupa object JSON.');
+    const tremId = payload.trem_id || topicTremId;
+    if (!tremId || tremId !== topicTremId) throw new Error('trem_id payload harus sama dengan trem_id pada topik MQTT.');
+
+    const gps = payload.sensors?.gps || {};
+    const vehicle = payload.vehicle || {};
+    const navigation = payload.navigation || {};
+    const safety = payload.safety || {};
+    const trip = payload.trip || {};
+    const obstacleInPath = Boolean(payload.sensors?.lidar?.obstacle_in_path);
+    const inSafeStopZone = navigation.in_safe_stop_zone === true;
+    const explicitSafeToStop = typeof safety.safe_to_stop === 'boolean' ? safety.safe_to_stop : null;
+
+    return {
+        trem_id: tremId,
+        source_timestamp: payload.timestamp || null,
+        received_at: new Date().toISOString(),
+        location: {
+            label: navigation.current_landmark || navigation.location_label || null,
+            latitude: Number.isFinite(gps.latitude) ? gps.latitude : null,
+            longitude: Number.isFinite(gps.longitude) ? gps.longitude : null,
+            gps_status: gps.status || 'unknown',
+            geofence_id: navigation.geofence_id || null,
+        },
+        vehicle: {
+            battery_percent: Number.isFinite(vehicle.battery_percent) ? vehicle.battery_percent : null,
+            speed_kmh: Number.isFinite(vehicle.speed_kmh) ? vehicle.speed_kmh : null,
+            motor_temperature_c: Number.isFinite(vehicle.motor_temperature_c) ? vehicle.motor_temperature_c : null,
+            occupancy: Number.isFinite(vehicle.occupancy) ? vehicle.occupancy : null,
+        },
+        navigation: {
+            route_id: navigation.route_id || null,
+            route_progress_percent: Number.isFinite(navigation.route_progress_percent) ? navigation.route_progress_percent : null,
+            eta_minutes: Number.isFinite(navigation.eta_minutes) ? navigation.eta_minutes : null,
+            in_safe_stop_zone: inSafeStopZone,
+            next_safe_stop: navigation.next_safe_stop || null,
+        },
+        safety: {
+            emergency: Boolean(safety.emergency),
+            safe_to_stop: explicitSafeToStop ?? (inSafeStopZone && !obstacleInPath),
+            reason: safety.reason || (obstacleInPath ? 'Rintangan terdeteksi pada jalur.' : null),
+            active_events: Array.isArray(safety.active_events) ? safety.active_events : [],
+        },
+        sensor_health: sensorHealth(payload.sensors),
+        trip: {
+            trip_id: trip.trip_id || null,
+            status: trip.status || null,
+        },
+        raw: payload,
+    };
+}
+
+function isStale(state) {
+    return Date.now() - Date.parse(state.received_at) > config.telemetryStaleSeconds * 1000;
+}
+
+console.log(`[MQTT] Menghubungkan ke ${config.mqttBrokerUrl}...`);
+const client = mqtt.connect(config.mqttBrokerUrl, {
+    clientId: `tremku_agent_${crypto.randomUUID().slice(0, 8)}`,
+    username: config.mqttUsername || undefined,
+    password: config.mqttPassword || undefined,
+    clean: false,
+    reconnectPeriod: 2000,
+    connectTimeout: 10000,
 });
 
 client.on('connect', () => {
-    console.log('[MQTT] Berhasil terhubung ke EMQX Broker.');
-    client.subscribe(TELEMETRY_TOPIC, (err) => {
-        if (!err) {
-            console.log(`[MQTT] Subscribed ke topik: ${TELEMETRY_TOPIC}`);
-        } else {
-            console.error('[MQTT] Gagal subscribe:', err);
-        }
+    connected = true;
+    lastError = null;
+    client.subscribe([TELEMETRY_TOPIC, ACK_TOPIC], { qos: 1 }, (error) => {
+        if (error) console.error(`[MQTT] Subscribe gagal: ${error.message}`);
+        else console.log(`[MQTT] Terhubung; subscribe ${TELEMETRY_TOPIC} dan ${ACK_TOPIC}.`);
     });
 });
 
+client.on('close', () => { connected = false; });
+client.on('error', (error) => {
+    lastError = error.message;
+    console.error(`[MQTT] ${error.message}`);
+});
+
 client.on('message', (topic, message) => {
-    // Contoh topik: tremku/telemetry/TRM-01
     const parts = topic.split('/');
-    if (parts.length === 3 && parts[1] === 'telemetry') {
-        const trem_id = parts[2];
-        try {
-            const data = JSON.parse(message.toString());
-            // Menyimpan state terbaru untuk armada tersebut
-            fleetState[trem_id] = {
-                ...data,
-                last_updated: new Date().toISOString()
-            };
-        } catch (e) {
-            console.error(`[MQTT] Gagal parsing payload dari ${topic}:`, message.toString());
+    const tremId = parts[2];
+    try {
+        const payload = JSON.parse(message.toString());
+        if (parts[1] === 'telemetry') {
+            fleetState.set(tremId, normalizeTelemetry(payload, tremId));
+        } else if (parts[1] === 'ack' && payload.correlation_id) {
+            const pending = pendingCommands.get(payload.correlation_id);
+            if (pending && pending.tremId === tremId) {
+                pendingCommands.delete(payload.correlation_id);
+                clearTimeout(pending.timer);
+                pending.resolve({ status: 'acknowledged', trem_id: tremId, acknowledgment: payload });
+            }
         }
+    } catch (error) {
+        console.error(`[MQTT] Payload tidak valid pada ${topic}: ${error.message}`);
     }
 });
 
-client.on('error', (err) => {
-    console.error('[MQTT] Connection error:', err.message);
-});
+function getLocation(tremId) {
+    const state = fleetState.get(tremId);
+    if (!state) return { status: 'unknown', message: `Telemetri ${tremId} belum tersedia.` };
+    if (isStale(state)) return { status: 'stale', trem_id: tremId, location: state.location, last_updated: state.received_at };
+    return { status: 'success', trem_id: tremId, ...state.location, last_updated: state.received_at };
+}
+
+function getFleetStatus() {
+    const data = [...fleetState.values()].map((state) => ({
+        trem_id: state.trem_id,
+        stale: isStale(state),
+        location: state.location,
+        battery_percent: state.vehicle.battery_percent,
+        speed_kmh: state.vehicle.speed_kmh,
+        occupancy: state.vehicle.occupancy,
+        route: state.navigation,
+        sensor_health: state.sensor_health,
+        safety: state.safety,
+        trip: state.trip,
+        last_updated: state.received_at,
+    }));
+    return data.length ? { status: 'success', data } : { status: 'empty', message: 'Belum ada armada yang mengirimkan telemetri.' };
+}
+
+function getSafetyStatus(tremId) {
+    const state = fleetState.get(tremId);
+    if (!state) return { status: 'unknown', safe_to_stop: false, reason: 'Telemetri kendaraan belum tersedia.' };
+    if (isStale(state)) return { status: 'stale', safe_to_stop: false, reason: 'Telemetri kendaraan sudah kedaluwarsa.' };
+    if (state.safety.emergency) return { status: 'unsafe', safe_to_stop: false, reason: state.safety.reason || 'Kendaraan dalam kondisi emergency.' };
+    return {
+        status: state.safety.safe_to_stop ? 'safe' : 'unsafe',
+        safe_to_stop: state.safety.safe_to_stop,
+        reason: state.safety.reason || (state.safety.safe_to_stop ? 'Kendaraan berada di zona berhenti aman.' : 'Kendaraan tidak berada di zona berhenti aman.'),
+        next_safe_stop: state.navigation.next_safe_stop,
+        last_updated: state.received_at,
+    };
+}
+
+function publishSlowdown(tremId, reason) {
+    if (!connected) return Promise.resolve({ status: 'error', message: 'Broker MQTT tidak terhubung.' });
+    const correlationId = crypto.randomUUID();
+    const topic = `${COMMAND_TOPIC_PREFIX}${tremId}`;
+    const payload = {
+        command: 'SLOWDOWN',
+        reason,
+        correlation_id: correlationId,
+        timestamp: new Date().toISOString(),
+        requires_ack: true,
+    };
+
+    return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+            pendingCommands.delete(correlationId);
+            resolve({
+                status: 'pending_ack',
+                trem_id: tremId,
+                correlation_id: correlationId,
+                message: 'Perintah diterima broker, tetapi belum dikonfirmasi kendaraan.',
+            });
+        }, config.commandAckTimeoutMs);
+        pendingCommands.set(correlationId, { tremId, resolve, timer });
+        client.publish(topic, JSON.stringify(payload), { qos: 1 }, (error) => {
+            if (!error) return;
+            pendingCommands.delete(correlationId);
+            clearTimeout(timer);
+            resolve({ status: 'error', message: `Publish perintah gagal: ${error.message}` });
+        });
+    });
+}
 
 module.exports = {
-    // Fungsi untuk Agent DINUS
-    getLocation: (trem_id) => {
-        const state = fleetState[trem_id];
-        if (state && state.location) {
-            return {
-                status: "success",
-                trem_id: trem_id,
-                location: state.location,
-                coordinates: state.coordinates || null,
-                last_updated: state.last_updated
-            };
-        }
-        return {
-            status: "unknown",
-            message: `Data lokasi untuk armada ${trem_id} belum tersedia dari MQTT.`
-        };
-    },
-
-    // Fungsi untuk Agent KOMANDO
-    getFleetStatus: () => {
-        const data = Object.keys(fleetState).map(trem_id => {
-            const state = fleetState[trem_id];
-            return {
-                trem_id: trem_id,
-                soc: state.soc || "Unknown",
-                speed: state.speed || "0 km/h",
-                route: state.route || "Unknown",
-                safety_events: state.safety_events || 0,
-                last_updated: state.last_updated
-            };
-        });
-
-        // Fallback jika belum ada data sama sekali yang masuk
-        if (data.length === 0) {
-             return { status: "empty", message: "Belum ada armada yang mengirimkan telemetri." };
-        }
-
-        return { status: "success", data: data };
-    },
-
-    // Fungsi untuk Agent KOMANDO (Trigger remote command)
-    publishSlowdown: (trem_id, reason) => {
-        return new Promise((resolve) => {
-            const topic = `${COMMAND_TOPIC_PREFIX}${trem_id}`;
-            const payload = JSON.stringify({
-                command: "SLOWDOWN",
-                reason: reason,
-                timestamp: new Date().toISOString()
-            });
-
-            client.publish(topic, payload, { qos: 1 }, (err) => {
-                if (err) {
-                    console.error('[MQTT] Publish error:', err);
-                    resolve({ status: "error", message: `Gagal mengirim instruksi ke ${trem_id}.` });
-                } else {
-                    console.log(`[MQTT] Publish to ${topic}: ${payload}`);
-                    resolve({ status: "success", message: `Instruksi SLOWDOWN terkirim ke ${trem_id}.` });
-                }
-            });
-        });
-    }
+    normalizeTelemetry,
+    getLocation,
+    getFleetStatus,
+    getSafetyStatus,
+    publishSlowdown,
+    getServiceStatus: () => ({ connected, broker: config.mqttBrokerUrl, fleet_size: fleetState.size, last_error: lastError }),
+    close: () => client.end(true),
 };

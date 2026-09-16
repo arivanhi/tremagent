@@ -19,6 +19,7 @@ Berikut adalah **Skema Standar JSON** yang diwajibkan agar dapat diproses oleh A
 ```json
 {
   "trem_id": "TRM-01",
+  "timestamp": "2026-09-16T12:00:00Z",
   "sensors": {
     "lidar": {
       "status": "ok",
@@ -43,7 +44,27 @@ Berikut adalah **Skema Standar JSON** yang diwajibkan agar dapat diproses oleh A
   "vehicle": {
     "battery_percent": 85.0,
     "motor_temperature_c": 32.5,
-    "speed_kmh": 12.3
+    "speed_kmh": 12.3,
+    "occupancy": 4
+  },
+  "navigation": {
+    "route_id": "KL-01",
+    "route_progress_percent": 35.5,
+    "eta_minutes": 18,
+    "current_landmark": "Gereja Blenduk",
+    "geofence_id": "GF-BLENDUK",
+    "in_safe_stop_zone": false,
+    "next_safe_stop": "STOP-SRIGUNTING"
+  },
+  "safety": {
+    "emergency": false,
+    "safe_to_stop": false,
+    "reason": "Di luar zona berhenti yang disetujui",
+    "active_events": []
+  },
+  "trip": {
+    "trip_id": "TRIP-20260916-001",
+    "status": "active"
   }
 }
 ```
@@ -53,6 +74,11 @@ Berikut adalah **Skema Standar JSON** yang diwajibkan agar dapat diproses oleh A
 - `gps.latitude` & `gps.longitude`: Harus berupa angka desimal bertipe *Float*. Data ini sangat dibutuhkan oleh agen DINUS untuk mencari landmark dan merangkai *storytelling* yang sesuai dengan posisi.
 - `vehicle.speed_kmh`: Kecepatan aktual dalam km/jam. Anda harus membuat node ROS2 yang mengonversi angka *ticks* dari sensor *rotary encoder* di roda/motor menjadi satuan *speed* (km/h) sebelum dienkapsulasi ke JSON ini.
 - `vehicle.battery_percent`: Diambil langsung dari BMS (Battery Management System).
+- `vehicle.occupancy`: Jumlah penumpang saat ini, tanpa menyimpan identitas pribadi.
+- `navigation.*`: Konteks rute, ETA, landmark, geofence, dan titik berhenti aman untuk DINUS/NARA/KOMANDO.
+- `safety.safe_to_stop`: Keputusan safety yang sudah dihitung oleh subsistem kendaraan. Server tidak boleh mengubah nilai ini menjadi `true` tanpa telemetri baru.
+- `safety.active_events`: Daftar event keselamatan aktif yang sudah disanitasi dan tidak memuat gambar mentah atau identitas penumpang.
+- `timestamp`: Waktu sumber dalam ISO-8601 UTC. Server juga menambahkan `received_at` sendiri dan menolak keputusan safety dari telemetri kedaluwarsa.
 
 ## 3. Penanganan Command dari Server (NARA/KOMANDO)
 Sistem otonom/ROS2 harus melakukan *subscribe* ke topik `tremku/command/<trem_id>` untuk mendengarkan perintah (intervensi) dari server.
@@ -62,7 +88,27 @@ Jika KOMANDO mendeteksi bahaya dan perlu mengirimkan perintah deselerasi/rem, pa
 {
   "command": "SLOWDOWN",
   "reason": "Darurat: Penumpang meminta penghentian mendadak.",
+  "timestamp": "2026-09-16T12:00:00Z",
+  "correlation_id": "0b3e5bf4-9ed4-47d4-8ac8-cbca85c39d25",
+  "requires_ack": true
+}
+```
+*Node* pengontrol (*vehicle controller*) di ROS2 harus mendengarkan payload ini dan memprosesnya melalui safety controller yang tervalidasi. Setelah diterima atau ditolak, Edge wajib memublikasikan acknowledgment ke `tremku/ack/<trem_id>`:
+
+```json
+{
+  "correlation_id": "0b3e5bf4-9ed4-47d4-8ac8-cbca85c39d25",
+  "status": "accepted",
+  "applied_speed_limit_kmh": 5.0,
   "timestamp": "2026-09-16T12:00:00Z"
 }
 ```
-*Node* pengontrol (*vehicle controller*) di ROS2 harus mendengarkan payload ini dan secara fisik mengaktifkan aktuator pengereman ketika *command* `"SLOWDOWN"` diterima.
+
+Status publish MQTT saja tidak dianggap bukti bahwa kendaraan sudah melakukan perlambatan. KOMANDO harus menunggu acknowledgment atau menandai perintah sebagai `pending_ack`.
+
+## 4. Validasi dan Freshness
+
+- Payload dengan `trem_id` berbeda dari ID pada topik ditolak.
+- `battery_percent`, `speed_kmh`, koordinat, ETA, dan occupancy harus berupa angka JSON, bukan string berunit.
+- Telemetri yang lebih tua dari ambang `TELEMETRY_STALE_SECONDS` tidak boleh dipakai untuk mengizinkan berhenti.
+- Ketiadaan data, sensor error, atau telemetri stale selalu menghasilkan keputusan fail-safe (`safe_to_stop=false`).

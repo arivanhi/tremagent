@@ -1,10 +1,12 @@
 {
   "name": "tremku-agents",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "TREM-KU multi-agent API, telemetry, memory, and tool-calling services",
+  "main": "api.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node api.js",
+    "seed:heritage": "node scripts/seed_heritage.js",
+    "test": "node --test --test-isolation=none"
   },
   "keywords": [],
   "author": "",
@@ -15,6 +17,6 @@
     "express": "^5.2.1",
     "mqtt": "^5.15.2",
     "openai": "^7.10.0",
-    "openclaw": "^2026.9.1"
+    "redis": "^5.8.2"
   }
 }

@@ -1,3 +1,5 @@
+const mqttService = require('../mqtt_service');
+
 module.exports = {
     name: "check_safety_status",
     description: "Bertanya kepada sistem NARA apakah kondisi aman untuk berhenti.",
@@ -8,11 +10,5 @@ module.exports = {
         },
         required: ["trem_id"]
     },
-    execute: async (args) => {
-        // TODO: Implementasi call internal ke agen NARA atau check safety logic
-        return JSON.stringify({
-            status: "unsafe",
-            reason: "bukan zona drop-off yang diizinkan (red-zone pedestrian)."
-        });
-    }
+    execute: async (args) => JSON.stringify(mqttService.getSafetyStatus(args.trem_id)),
 };

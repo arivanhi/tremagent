@@ -1,0 +1,38 @@
+[
+  {
+    "id": "gereja-blenduk",
+    "name": "Gereja Blenduk",
+    "category": "heritage",
+    "location": "Kota Lama Semarang",
+    "content": "Gereja Blenduk dikenal dengan kubah besarnya dan menjadi salah satu landmark utama Kota Lama Semarang. Gunakan narasi ini sebagai pengantar; detail tahun, tokoh, dan renovasi harus diverifikasi oleh pengelola sebelum dipublikasikan sebagai fakta final.",
+    "source": "Kurasi awal TREM-KU",
+    "review_status": "needs_curator_review"
+  },
+  {
+    "id": "taman-srigunting",
+    "name": "Taman Srigunting",
+    "category": "public-space",
+    "location": "Kota Lama Semarang",
+    "content": "Taman Srigunting merupakan ruang publik di kawasan Kota Lama yang sering digunakan sebagai titik orientasi dan tempat singgah wisatawan.",
+    "source": "Kurasi awal TREM-KU",
+    "review_status": "needs_curator_review"
+  },
+  {
+    "id": "gedung-marba",
+    "name": "Gedung Marba",
+    "category": "architecture",
+    "location": "Kota Lama Semarang",
+    "content": "Gedung Marba merupakan salah satu bangunan bersejarah yang mudah dikenali di sekitar kawasan inti Kota Lama Semarang. Narasi rinci perlu mengikuti hasil kurasi ahli heritage.",
+    "source": "Kurasi awal TREM-KU",
+    "review_status": "needs_curator_review"
+  },
+  {
+    "id": "kota-lama-overview",
+    "name": "Kota Lama Semarang",
+    "category": "area-overview",
+    "location": "Semarang",
+    "content": "Kota Lama Semarang adalah kawasan bersejarah dengan konsentrasi bangunan lama, ruang publik, museum, tempat kuliner, dan rute berjalan kaki. DINUS harus menyesuaikan cerita dengan posisi kendaraan, minat penumpang, dan konten yang sudah disetujui pengelola.",
+    "source": "Kebijakan narasi TREM-KU",
+    "review_status": "approved_for_demo"
+  }
+]
