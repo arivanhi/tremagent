@@ -15,7 +15,7 @@ from qdrant_client.models import Distance, VectorParams, PointStruct
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from faster_whisper import WhisperModel
-from transformers import VitsModel, AutoTokenizer
+import edge_tts
 
 warnings.filterwarnings("ignore")
 
@@ -32,9 +32,7 @@ app = FastAPI()
 print("[1/2] Memuat Faster-Whisper (STT)...")
 stt_model = WhisperModel("small", device="cpu", compute_type="int8")
 
-print("[2/2] Memuat MMS-TTS Indonesia (Super Cepat)...")
-tts_tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-ind")
-tts_model = VitsModel.from_pretrained("facebook/mms-tts-ind").to("cpu")
+print("[2/2] Menggunakan Edge TTS (GadisNeural)...")
 
 def load_env():
     env_path = os.path.join(os.path.dirname(__file__), "../tremku-agents/.env")
@@ -172,7 +170,7 @@ HTML_PAGE = """
                     document.getElementById('dinusText').textContent += data.text;
                     document.getElementById('status').innerText = "Status: DINUS Berbicara... 🔊";
                 } else if (data.type === "audio") {
-                    audioQueue.push("data:audio/wav;base64," + data.data);
+                    audioQueue.push("data:audio/mpeg;base64," + data.data);
                     if (!isAIPlaying && !isUserSpeaking) playNextAudio(); // Jangan putar jika user sedang motong pembicaraan
                 } else if (data.type === "done") {
                     if(!isUserSpeaking) document.getElementById('status').innerText = "Status: Menunggu pertanyaan... 🎧";
@@ -267,12 +265,10 @@ async def websocket_endpoint(websocket: WebSocket):
             ]
             filler_text = random.choice(fillers)
             try:
-                inputs_filler = tts_tokenizer(filler_text, return_tensors="pt")
-                with torch.no_grad():
-                    waveform_filler = tts_model(**inputs_filler).waveform[0].numpy()
-                fd_filler, filler_path = tempfile.mkstemp(suffix=".wav")
+                fd_filler, filler_path = tempfile.mkstemp(suffix=".mp3")
                 os.close(fd_filler)
-                scipy.io.wavfile.write(filler_path, rate=tts_model.config.sampling_rate, data=waveform_filler)
+                communicate = edge_tts.Communicate(filler_text, "id-ID-GadisNeural")
+                await communicate.save(filler_path)
                 with open(filler_path, "rb") as f:
                     encoded_filler = base64.b64encode(f.read()).decode('utf-8')
                 await websocket.send_text(json.dumps({"type": "audio", "data": encoded_filler}))
@@ -361,11 +357,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 await websocket.send_text(json.dumps({"type": "token", "text": error_msg}))
                 # putar TTS error
-                inputs = tts_tokenizer(error_msg, return_tensors="pt")
-                with torch.no_grad():
-                    waveform = tts_model(**inputs).waveform[0].numpy()
-                output_file = f"mms_chunk_error.wav"
-                scipy.io.wavfile.write(output_file, rate=tts_model.config.sampling_rate, data=waveform)
+                output_file = f"edge_chunk_error.mp3"
+                communicate = edge_tts.Communicate(error_msg, "id-ID-GadisNeural")
+                await communicate.save(output_file)
                 with open(output_file, "rb") as f:
                     encoded_audio = base64.b64encode(f.read()).decode('utf-8')
                 await websocket.send_text(json.dumps({"type": "audio", "data": encoded_audio}))
@@ -393,15 +387,12 @@ async def websocket_endpoint(websocket: WebSocket):
                                 sentence_buffer = ""
                                 
                                 if len(chunk_text) > 2:
-                                    print(f"-> Memproses MMS-TTS: {chunk_text}")
+                                    print(f"-> Memproses Edge TTS: {chunk_text}")
                                     
-                                    # Eksekusi MMS-TTS (Sangat Cepat di CPU)
-                                    inputs = tts_tokenizer(chunk_text, return_tensors="pt")
-                                    with torch.no_grad():
-                                        waveform = tts_model(**inputs).waveform[0].numpy()
-                                    
-                                    output_file = f"mms_chunk_{chunk_index}.wav"
-                                    scipy.io.wavfile.write(output_file, rate=tts_model.config.sampling_rate, data=waveform)
+                                    # Eksekusi Edge TTS
+                                    output_file = f"edge_chunk_{chunk_index}.mp3"
+                                    communicate = edge_tts.Communicate(chunk_text, "id-ID-GadisNeural", rate="+15%")
+                                    await communicate.save(output_file)
                                     
                                     # Kirim Audio ke Web
                                     with open(output_file, "rb") as f:
@@ -416,11 +407,9 @@ async def websocket_endpoint(websocket: WebSocket):
             # Sisa kalimat yang tidak memiliki tanda baca di akhir
             if len(sentence_buffer.strip()) > 2:
                 chunk_text = sentence_buffer.strip()
-                inputs = tts_tokenizer(chunk_text, return_tensors="pt")
-                with torch.no_grad():
-                    waveform = tts_model(**inputs).waveform[0].numpy()
-                output_file = f"mms_chunk_{chunk_index}.wav"
-                scipy.io.wavfile.write(output_file, rate=tts_model.config.sampling_rate, data=waveform)
+                output_file = f"edge_chunk_{chunk_index}.mp3"
+                communicate = edge_tts.Communicate(chunk_text, "id-ID-GadisNeural", rate="+15%")
+                await communicate.save(output_file)
                 with open(output_file, "rb") as f:
                     encoded_audio = base64.b64encode(f.read()).decode('utf-8')
                 await websocket.send_text(json.dumps({"type": "audio", "data": encoded_audio}))
