@@ -1,0 +1,59 @@
+[
+  {
+    "id": "route-ganti-slug-unik",
+    "document_type": "route",
+    "name": "GANTI Nama Rute",
+    "aliases": [],
+    "category": "tourism-route",
+    "location": {
+      "area": "GANTI Kawasan layanan",
+      "city": "Semarang"
+    },
+    "summary": "GANTI Ringkasan tujuan dan cakupan rute.",
+    "content": "GANTI Narasi rute yang menjelaskan titik awal, urutan pemberhentian, tujuan akhir, perkiraan durasi, serta konteks wisata yang relevan.",
+    "route": {
+      "route_id": "GANTI-ID-RUTE",
+      "origin": "GANTI Titik awal",
+      "destination": "GANTI Titik akhir",
+      "distance_km": null,
+      "estimated_duration_minutes": null,
+      "operation_schedule": "GANTI Jadwal dan tanggal berlakunya",
+      "stops": [
+        {
+          "sequence": 1,
+          "stop_id": "GANTI-ID-HALTE",
+          "name": "GANTI Nama pemberhentian",
+          "latitude": null,
+          "longitude": null,
+          "safe_stop_zone": false,
+          "nearby_destinations": [],
+          "narration_hint": "GANTI Narasi singkat saat mendekati titik ini"
+        }
+      ],
+      "accessibility_notes": [],
+      "operational_notes": [],
+      "safety_notes": [
+        "GANTI Hanya gunakan ketentuan yang disetujui tim operasi"
+      ]
+    },
+    "tags": [
+      "rute",
+      "GANTI kata-kunci kawasan"
+    ],
+    "source": [
+      {
+        "title": "GANTI Dokumen rute resmi",
+        "publisher": "GANTI Tim operasi atau pengelola",
+        "url": "https://contoh.invalid/rute",
+        "published_at": null,
+        "accessed_at": "YYYY-MM-DD"
+      }
+    ],
+    "review_status": "draft",
+    "reviewed_by": null,
+    "version": 1,
+    "updated_at": "YYYY-MM-DD",
+    "valid_from": "YYYY-MM-DD",
+    "valid_until": null
+  }
+]

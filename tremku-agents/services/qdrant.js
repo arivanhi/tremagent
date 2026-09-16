@@ -46,6 +46,15 @@ async function upsert(name, vector, payload, id = crypto.randomUUID()) {
     return pointId(id);
 }
 
+async function remove(name, id) {
+    if (!(await collectionExists(name))) return false;
+    await request(`/collections/${encodeURIComponent(name)}/points/delete?wait=true`, {
+        method: 'POST',
+        body: JSON.stringify({ points: [pointId(id)] }),
+    });
+    return true;
+}
+
 async function search(name, vector, limit = 4, scoreThreshold = 0.25) {
     if (!(await collectionExists(name))) return [];
     const result = await request(`/collections/${encodeURIComponent(name)}/points/query`, {
@@ -69,4 +78,4 @@ async function status() {
     }
 }
 
-module.exports = { ensureCollection, upsert, search, status };
+module.exports = { ensureCollection, upsert, remove, search, status };

@@ -1,0 +1,53 @@
+[
+  {
+    "id": "destination-ganti-slug-unik",
+    "document_type": "destination",
+    "name": "GANTI Nama Destinasi",
+    "aliases": [
+      "GANTI Nama lain jika ada"
+    ],
+    "category": "heritage",
+    "location": {
+      "area": "GANTI Kawasan atau kecamatan",
+      "address": "GANTI Alamat resmi",
+      "latitude": null,
+      "longitude": null,
+      "geofence_id": null
+    },
+    "summary": "GANTI Ringkasan satu atau dua kalimat.",
+    "content": "GANTI Narasi faktual mandiri mengenai sejarah, keunikan, dan konteks destinasi. Gunakan bahasa formal, jelas, dan sesuai sumber yang telah diverifikasi.",
+    "facts": [
+      {
+        "label": "GANTI Fakta utama",
+        "value": "GANTI Nilai fakta",
+        "confidence": "verified"
+      }
+    ],
+    "visitor_information": {
+      "opening_hours": "GANTI Jadwal resmi atau tulis perlu konfirmasi",
+      "ticket_information": "GANTI Informasi tiket dan tanggal berlakunya",
+      "recommended_visit_minutes": 30,
+      "facilities": [],
+      "accessibility": [],
+      "visitor_guidance": []
+    },
+    "tags": [
+      "GANTI kata-kunci"
+    ],
+    "source": [
+      {
+        "title": "GANTI Judul sumber",
+        "publisher": "GANTI Penerbit atau pengelola resmi",
+        "url": "https://contoh.invalid/sumber",
+        "published_at": null,
+        "accessed_at": "YYYY-MM-DD"
+      }
+    ],
+    "review_status": "draft",
+    "reviewed_by": null,
+    "version": 1,
+    "updated_at": "YYYY-MM-DD",
+    "valid_from": "YYYY-MM-DD",
+    "valid_until": null
+  }
+]

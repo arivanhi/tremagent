@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Knowledge Admin TREM-KU</title>
+  <style>
+    :root{font-family:Inter,system-ui,sans-serif;color:#172334;background:#eef3f7}*{box-sizing:border-box}body{margin:0}header{background:#12344d;color:#fff;padding:20px 28px;display:flex;gap:20px;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:2}header h1{font-size:20px;margin:0}header p{margin:4px 0 0;color:#bed1de;font-size:13px}.auth{display:flex;gap:8px}.auth input{min-width:260px}main{max-width:1180px;margin:24px auto;padding:0 18px 40px;display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,1fr);gap:20px}.panel{background:#fff;border:1px solid #d7e0e7;border-radius:14px;padding:22px;box-shadow:0 5px 18px #17324d0b}h2{font-size:18px;margin:0 0 16px}h3{font-size:15px;margin:20px 0 10px;color:#24506e}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.full{grid-column:1/-1}label{display:block;font-size:13px;font-weight:650;color:#365164;margin-bottom:5px}input,select,textarea,button{font:inherit;border-radius:8px;border:1px solid #b9c9d4;padding:10px 11px;width:100%}textarea{min-height:120px;resize:vertical}button{border:0;background:#147a72;color:#fff;font-weight:700;cursor:pointer;width:auto}button.secondary{background:#e8eff4;color:#24465c}button.danger{background:#a64646}.actions{display:flex;gap:10px;margin-top:20px;align-items:center}.hint{font-size:12px;color:#6e8290;margin-top:5px}.status{margin:0 0 16px;padding:11px 13px;border-radius:8px;background:#e8eff4;color:#365164}.status.ok{background:#dff4ec;color:#16624f}.status.bad{background:#fae6e5;color:#8b302c}.conditional{display:none}.conditional.active{display:block}.point{border:1px solid #d7e0e7;background:#f7fafc;border-radius:10px;padding:12px;margin-bottom:10px}.point-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.point-head strong{font-size:13px}.point .grid{grid-template-columns:2fr 1fr 1fr}.record{padding:12px 0;border-bottom:1px solid #e3e9ed}.record:last-child{border:0}.record button{margin-top:8px;font-size:12px;padding:7px 10px}.badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#e8eff4;font-size:11px;margin-left:5px}.badge.approved{background:#dff4ec;color:#16624f}@media(max-width:850px){main{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.full{grid-column:auto}header{position:static;display:block}.auth{margin-top:12px}.auth input{min-width:0}.point .grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<header>
+  <div><h1>Knowledge Admin TREM-KU</h1><p>Destinasi, rute perjalanan, dan informasi kampus UDINUS</p></div>
+  <div class="auth"><input id="adminKey" type="password" placeholder="Knowledge admin key"><button id="connect" type="button">Hubungkan</button></div>
+</header>
+<main>
+  <section class="panel">
+    <div id="status" class="status">Masukkan admin key untuk memuat data.</div>
+    <h2>Form Knowledge</h2>
+    <form id="form">
+      <input id="recordId" type="hidden">
+      <div class="grid">
+        <div><label for="type">Jenis knowledge</label><select id="type" required><option value="destination">Destinasi atau tempat</option><option value="route">Rute perjalanan</option><option value="campus">Kampus UDINUS</option></select></div>
+        <div><label for="category">Kategori</label><input id="category" placeholder="Contoh: sejarah, arsitektur, layanan kampus"></div>
+        <div class="full"><label for="topic">Topik knowledge</label><input id="topic" required maxlength="200" placeholder="Nama tempat, nama rute, atau nama unit kampus"></div>
+        <div class="full"><label for="summary">Ringkasan</label><textarea id="summary" maxlength="600" placeholder="Ringkasan singkat yang menjelaskan knowledge ini"></textarea></div>
+        <div class="full"><label for="content">Isi knowledge</label><textarea id="content" required maxlength="12000" placeholder="Tuliskan informasi faktual minimal 40 karakter"></textarea></div>
+        <div class="full"><label for="tags">Kata kunci</label><input id="tags" placeholder="Pisahkan dengan koma, contoh: sejarah, kota lama, arsitektur"></div>
+      </div>
+
+      <div id="destinationFields" class="conditional active">
+        <h3>Lokasi Destinasi</h3>
+        <div class="grid">
+          <div><label for="destArea">Kawasan</label><input id="destArea" placeholder="Kota Lama Semarang"></div>
+          <div><label for="destAddress">Alamat</label><input id="destAddress"></div>
+          <div><label for="destLat">Latitude</label><input id="destLat" type="number" step="any" placeholder="-6.966667"></div>
+          <div><label for="destLng">Longitude</label><input id="destLng" type="number" step="any" placeholder="110.416664"></div>
+          <div><label for="openingHours">Jam operasional</label><input id="openingHours"></div>
+          <div><label for="visitorGuidance">Panduan pengunjung</label><input id="visitorGuidance" placeholder="Pisahkan dengan koma"></div>
+        </div>
+      </div>
+
+      <div id="routeFields" class="conditional">
+        <h3>Informasi Rute</h3>
+        <div class="grid">
+          <div><label for="routeId">ID rute</label><input id="routeId" placeholder="KL-01"></div>
+          <div><label for="routeArea">Kawasan</label><input id="routeArea" placeholder="Kota Lama Semarang"></div>
+          <div><label for="routeDuration">Estimasi durasi, menit</label><input id="routeDuration" type="number" min="1"></div>
+          <div><label for="routeSchedule">Jadwal operasi</label><input id="routeSchedule"></div>
+          <div class="full"><label for="routeSafety">Catatan keselamatan</label><input id="routeSafety" placeholder="Pisahkan dengan koma"></div>
+        </div>
+        <h3>Titik Koordinat Rute</h3>
+        <div id="routePoints"></div>
+        <button id="addPoint" type="button" class="secondary">Tambah titik</button>
+        <p class="hint">Rute wajib memiliki minimal titik awal dan titik akhir. Setiap titik harus memiliki latitude dan longitude.</p>
+      </div>
+
+      <div id="campusFields" class="conditional">
+        <h3>Informasi Kampus UDINUS</h3>
+        <div class="grid">
+          <div><label for="campusType">Jenis unit</label><input id="campusType" placeholder="Fakultas, program studi, layanan, fasilitas"></div>
+          <div><label for="campusBuilding">Gedung</label><input id="campusBuilding"></div>
+          <div><label for="campusFloor">Lantai</label><input id="campusFloor"></div>
+          <div><label for="campusHours">Jam layanan</label><input id="campusHours"></div>
+          <div class="full"><label for="campusAddress">Alamat</label><input id="campusAddress"></div>
+          <div><label for="campusLat">Latitude opsional</label><input id="campusLat" type="number" step="any"></div>
+          <div><label for="campusLng">Longitude opsional</label><input id="campusLng" type="number" step="any"></div>
+          <div><label for="campusServices">Layanan</label><input id="campusServices" placeholder="Pisahkan dengan koma"></div>
+          <div><label for="campusGuidance">Panduan pengunjung</label><input id="campusGuidance" placeholder="Pisahkan dengan koma"></div>
+        </div>
+      </div>
+
+      <h3>Sumber dan Review</h3>
+      <div class="grid">
+        <div><label for="sourceTitle">Nama sumber</label><input id="sourceTitle" required placeholder="Dokumen atau halaman resmi"></div>
+        <div><label for="sourcePublisher">Penerbit</label><input id="sourcePublisher"></div>
+        <div class="full"><label for="sourceUrl">URL sumber</label><input id="sourceUrl" type="url" placeholder="https://"></div>
+        <div><label for="reviewStatus">Status</label><select id="reviewStatus"><option value="draft">Draft, belum masuk RAG</option><option value="approved">Disetujui dan langsung diindeks</option><option value="archived">Arsipkan dan hapus dari indeks</option></select></div>
+        <div><label for="reviewedBy">Diperiksa oleh</label><input id="reviewedBy" placeholder="Wajib untuk status disetujui"></div>
+        <div><label for="validFrom">Berlaku mulai</label><input id="validFrom" type="date"></div>
+        <div><label for="validUntil">Berlaku sampai</label><input id="validUntil" type="date"></div>
+      </div>
+      <div class="actions"><button type="submit">Simpan knowledge</button><button id="reset" type="button" class="secondary">Form baru</button></div>
+    </form>
+  </section>
+
+  <aside class="panel"><h2>Data dari Web</h2><p class="hint">Pilih data untuk memperbarui isian. Data heritage bawaan tetap dikelola melalui file sumber.</p><div id="records"></div></aside>
+</main>
+<script>
+const $=id=>document.getElementById(id);const form=$('form'),statusEl=$('status'),recordsEl=$('records'),keyEl=$('adminKey'),typeEl=$('type'),pointsEl=$('routePoints');
+keyEl.value=sessionStorage.getItem('tremku-knowledge-key')||'';
+const split=value=>String(value||'').split(',').map(x=>x.trim()).filter(Boolean);
+const setStatus=(message,kind='')=>{statusEl.textContent=message;statusEl.className='status '+kind};
+function authHeaders(){return {'content-type':'application/json','x-knowledge-admin-key':keyEl.value}}
+function updateSections(){for(const name of ['destination','route','campus'])$(name+'Fields').classList.toggle('active',typeEl.value===name)}
+typeEl.onchange=updateSections;
+function addPoint(value={}){const wrap=document.createElement('div');wrap.className='point';const head=document.createElement('div');head.className='point-head';const title=document.createElement('strong');const remove=document.createElement('button');remove.type='button';remove.className='danger';remove.textContent='Hapus';remove.onclick=()=>{wrap.remove();renumberPoints()};head.append(title,remove);const grid=document.createElement('div');grid.className='grid';const fields=[['name','Nama titik','text'],['latitude','Latitude','number'],['longitude','Longitude','number']];for(const [name,label,type] of fields){const box=document.createElement('div');const lab=document.createElement('label');lab.textContent=label;const input=document.createElement('input');input.dataset.field=name;input.type=type;if(type==='number')input.step='any';input.value=value[name]??'';box.append(lab,input);grid.append(box)}const noteBox=document.createElement('div');noteBox.className='full';const noteLabel=document.createElement('label');noteLabel.textContent='Petunjuk narasi';const note=document.createElement('input');note.dataset.field='narration_hint';note.value=value.narration_hint||'';noteBox.append(noteLabel,note);grid.append(noteBox);const safeLabel=document.createElement('label');const safe=document.createElement('input');safe.type='checkbox';safe.dataset.field='safe_stop_zone';safe.checked=value.safe_stop_zone===true;safe.style.width='auto';safeLabel.append(safe,document.createTextNode(' Zona berhenti aman'));grid.append(safeLabel);wrap.append(head,grid);pointsEl.append(wrap);renumberPoints()}
+function renumberPoints(){[...pointsEl.children].forEach((point,index)=>{point.querySelector('strong').textContent=`Titik ${index+1}`;point.querySelector('.danger').disabled=pointsEl.children.length<=2})}
+function routePoints(){return [...pointsEl.children].map(point=>{const result={};point.querySelectorAll('[data-field]').forEach(input=>{result[input.dataset.field]=input.type==='checkbox'?input.checked:input.value});return result})}
+function resetForm(){form.reset();$('recordId').value='';typeEl.value='destination';pointsEl.replaceChildren();addPoint({name:'Titik awal'});addPoint({name:'Titik akhir'});$('validFrom').value=new Date().toISOString().slice(0,10);updateSections();setStatus('Form baru siap diisi.')}
+function payload(){return{id:$('recordId').value||undefined,document_type:typeEl.value,topic:$('topic').value,category:$('category').value,summary:$('summary').value,content:$('content').value,tags:split($('tags').value),source_title:$('sourceTitle').value,source_publisher:$('sourcePublisher').value,source_url:$('sourceUrl').value,review_status:$('reviewStatus').value,reviewed_by:$('reviewedBy').value,valid_from:$('validFrom').value,valid_until:$('validUntil').value,destination:{area:$('destArea').value,address:$('destAddress').value,latitude:$('destLat').value,longitude:$('destLng').value,opening_hours:$('openingHours').value,visitor_guidance:split($('visitorGuidance').value)},route:{route_id:$('routeId').value,area:$('routeArea').value,estimated_duration_minutes:$('routeDuration').value,operation_schedule:$('routeSchedule').value,safety_notes:split($('routeSafety').value),points:routePoints()},campus:{unit_type:$('campusType').value,building:$('campusBuilding').value,floor:$('campusFloor').value,service_hours:$('campusHours').value,address:$('campusAddress').value,latitude:$('campusLat').value,longitude:$('campusLng').value,services:split($('campusServices').value),visitor_guidance:split($('campusGuidance').value)}}}
+async function load(){if(!keyEl.value)return setStatus('Knowledge admin key belum diisi.','bad');try{const response=await fetch('/api/knowledge-admin/records',{headers:authHeaders()});const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);renderRecords(result.records||[]);setStatus(`${result.records?.length||0} data web berhasil dimuat.`,'ok')}catch(error){setStatus(`Gagal memuat data: ${error.message}`,'bad')}}
+function renderRecords(records){recordsEl.replaceChildren();if(!records.length){recordsEl.textContent='Belum ada data yang dibuat melalui web.';return}for(const record of records.sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at)))){const item=document.createElement('div');item.className='record';const name=document.createElement('strong');name.textContent=record.name;const badge=document.createElement('span');badge.className='badge '+(record.review_status==='approved'?'approved':'');badge.textContent=record.review_status;const meta=document.createElement('div');meta.className='hint';meta.textContent=`${record.document_type} · versi ${record.version||1} · ${record.updated_at||'-'}`;const edit=document.createElement('button');edit.type='button';edit.className='secondary';edit.textContent='Ubah';edit.onclick=()=>fillForm(record);const remove=document.createElement('button');remove.type='button';remove.className='danger';remove.textContent='Hapus';remove.style.marginLeft='6px';remove.onclick=()=>deleteRecord(record);item.append(name,badge,meta,edit,remove);recordsEl.append(item)}}
+async function deleteRecord(record){if(!confirm(`Hapus ${record.name} dari penyimpanan dan indeks RAG?`))return;try{const response=await fetch(`/api/knowledge-admin/records/${encodeURIComponent(record.id)}`,{method:'DELETE',headers:authHeaders()});const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);setStatus(`Data ${record.id} telah dihapus.`,'ok');resetForm();await load()}catch(error){setStatus(`Gagal menghapus: ${error.message}`,'bad')}}
+function fillForm(record){resetForm();$('recordId').value=record.id;typeEl.value=record.document_type;$('topic').value=record.name||'';$('category').value=record.category||'';$('summary').value=record.summary||'';$('content').value=record.content||'';$('tags').value=(record.tags||[]).join(', ');const source=record.source?.[0]||{};$('sourceTitle').value=source.title||'';$('sourcePublisher').value=source.publisher||'';$('sourceUrl').value=source.url||'';$('reviewStatus').value=record.review_status||'draft';$('reviewedBy').value=record.reviewed_by||'';$('validFrom').value=record.valid_from||'';$('validUntil').value=record.valid_until||'';if(record.document_type==='destination'){$('destArea').value=record.location?.area||'';$('destAddress').value=record.location?.address||'';$('destLat').value=record.location?.latitude??'';$('destLng').value=record.location?.longitude??'';$('openingHours').value=record.visitor_information?.opening_hours||'';$('visitorGuidance').value=(record.visitor_information?.visitor_guidance||[]).join(', ')}else if(record.document_type==='route'){$('routeId').value=record.route?.route_id||'';$('routeArea').value=record.location?.area||'';$('routeDuration').value=record.route?.estimated_duration_minutes||'';$('routeSchedule').value=record.route?.operation_schedule||'';$('routeSafety').value=(record.route?.safety_notes||[]).join(', ');pointsEl.replaceChildren();for(const point of record.route?.stops||[])addPoint(point);while(pointsEl.children.length<2)addPoint()}else{$('campusType').value=record.campus?.unit_type||'';$('campusBuilding').value=record.location?.building||'';$('campusFloor').value=record.location?.floor||'';$('campusHours').value=record.campus?.service_hours||'';$('campusAddress').value=record.location?.address||'';$('campusLat').value=record.location?.latitude??'';$('campusLng').value=record.location?.longitude??'';$('campusServices').value=(record.campus?.services||[]).join(', ');$('campusGuidance').value=(record.campus?.visitor_guidance||[]).join(', ')}updateSections();window.scrollTo({top:0,behavior:'smooth'});setStatus(`Mengubah ${record.id}.`)}
+form.onsubmit=async event=>{event.preventDefault();if(!keyEl.value)return setStatus('Knowledge admin key belum diisi.','bad');setStatus('Menyimpan dan memperbarui indeks...');try{const response=await fetch('/api/knowledge-admin/records',{method:'POST',headers:authHeaders(),body:JSON.stringify(payload())});const result=await response.json();if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);setStatus(`Data ${result.record.id} tersimpan. Status indeks: ${result.indexed?'aktif':'tidak aktif'}.`,'ok');await load();$('recordId').value=result.record.id}catch(error){setStatus(`Gagal menyimpan: ${error.message}`,'bad')}};
+$('connect').onclick=()=>{sessionStorage.setItem('tremku-knowledge-key',keyEl.value);load()};$('addPoint').onclick=()=>addPoint();$('reset').onclick=resetForm;resetForm();if(keyEl.value)load();
+</script>
+</body>
+</html>

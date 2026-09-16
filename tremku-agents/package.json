@@ -5,7 +5,9 @@
   "main": "api.js",
   "scripts": {
     "start": "node api.js",
-    "seed:heritage": "node scripts/seed_heritage.js",
+    "validate:knowledge": "node scripts/validate_knowledge.js",
+    "seed:knowledge": "node scripts/seed_knowledge.js",
+    "seed:heritage": "node scripts/seed_knowledge.js",
     "test": "node --test --test-isolation=none"
   },
   "keywords": [],

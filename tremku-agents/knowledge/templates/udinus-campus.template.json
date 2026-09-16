@@ -1,0 +1,52 @@
+[
+  {
+    "id": "campus-udinus-ganti-slug-unik",
+    "document_type": "campus",
+    "name": "GANTI Nama unit, fasilitas, atau layanan UDINUS",
+    "aliases": [],
+    "category": "campus-information",
+    "location": {
+      "campus": "Universitas Dian Nuswantoro",
+      "building": "GANTI Nama atau kode gedung",
+      "floor": null,
+      "address": "GANTI Alamat resmi",
+      "latitude": null,
+      "longitude": null
+    },
+    "summary": "GANTI Ringkasan fungsi unit atau fasilitas.",
+    "content": "GANTI Narasi faktual mengenai fungsi, layanan, lokasi, serta panduan yang relevan bagi mahasiswa atau pengunjung UDINUS.",
+    "campus": {
+      "unit_type": "GANTI fakultas, program-studi, layanan, fasilitas, atau organisasi",
+      "faculty": null,
+      "programs": [],
+      "services": [],
+      "facilities": [],
+      "service_hours": "GANTI Jadwal resmi dan tanggal berlakunya",
+      "official_contact": {
+        "website": "https://contoh.invalid/udinus",
+        "email": null,
+        "phone": null
+      },
+      "visitor_guidance": []
+    },
+    "tags": [
+      "udinus",
+      "GANTI kata-kunci unit"
+    ],
+    "source": [
+      {
+        "title": "GANTI Halaman atau dokumen resmi UDINUS",
+        "publisher": "Universitas Dian Nuswantoro",
+        "url": "https://contoh.invalid/udinus-sumber",
+        "published_at": null,
+        "accessed_at": "YYYY-MM-DD"
+      }
+    ],
+    "review_status": "draft",
+    "reviewed_by": null,
+    "version": 1,
+    "updated_at": "YYYY-MM-DD",
+    "valid_from": "YYYY-MM-DD",
+    "valid_until": null
+  }
+]

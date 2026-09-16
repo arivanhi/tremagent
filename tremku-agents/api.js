@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { OpenAI } = require('openai');
@@ -10,6 +11,7 @@ const qdrantService = require('./services/qdrant');
 const ollamaService = require('./services/ollama');
 const heartbeat = require('./services/heartbeat');
 const { RESPONSE_STYLE, cleanAssistantReply } = require('./services/response_style');
+const knowledgeStore = require('./services/knowledge_store');
 
 const app = express();
 app.disable('x-powered-by');
@@ -57,6 +59,20 @@ function requireApiKey(req, res, next) {
     next();
 }
 
+function secretMatches(provided, expected) {
+    const left = Buffer.from(String(provided || ''));
+    const right = Buffer.from(String(expected || ''));
+    return left.length === right.length && left.length > 0 && crypto.timingSafeEqual(left, right);
+}
+
+function requireKnowledgeAdminKey(req, res, next) {
+    if (!config.knowledgeAdminKey) return res.status(503).json({ error: 'KNOWLEDGE_ADMIN_KEY belum dikonfigurasi.' });
+    if (!secretMatches(req.get('x-knowledge-admin-key'), config.knowledgeAdminKey)) {
+        return res.status(401).json({ error: 'Knowledge admin key tidak valid.' });
+    }
+    next();
+}
+
 app.use(rateLimit);
 
 app.get('/health', async (_req, res) => {
@@ -70,9 +86,39 @@ app.get('/health', async (_req, res) => {
     res.status(healthy ? 200 : 503).json({ status: healthy ? 'ok' : 'degraded', services: { mqtt, redis, qdrant, ollama } });
 });
 
+app.get('/', (_req, res) => res.redirect('/knowledge-admin'));
 app.get('/dashboard', (_req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
+app.get('/knowledge-admin', (_req, res) => res.sendFile(path.join(__dirname, 'knowledge-admin.html')));
 app.get('/api/fleet', requireApiKey, (_req, res) => res.json(mqttService.getFleetStatus()));
 app.get('/api/safety/:tremId', requireApiKey, (req, res) => res.json(mqttService.getSafetyStatus(req.params.tremId)));
+app.get('/api/knowledge-admin/records', requireKnowledgeAdminKey, (_req, res) => {
+    try {
+        res.json({ records: knowledgeStore.readWebRecords() });
+    } catch (error) {
+        console.error(`[KNOWLEDGE] Gagal membaca data: ${error.message}`);
+        res.status(500).json({ error: 'Data knowledge tidak dapat dibaca.' });
+    }
+});
+app.post('/api/knowledge-admin/records', requireKnowledgeAdminKey, async (req, res) => {
+    try {
+        const result = await knowledgeStore.saveKnowledge(req.body || {});
+        res.status(200).json(result);
+    } catch (error) {
+        console.error(`[KNOWLEDGE] Gagal menyimpan data: ${error.message}`);
+        res.status(error.statusCode || 500).json({
+            error: error.publicMessage || (error.statusCode === 400 ? error.message : 'Data knowledge tidak dapat disimpan.'),
+        });
+    }
+});
+app.delete('/api/knowledge-admin/records/:id', requireKnowledgeAdminKey, async (req, res) => {
+    try {
+        const deleted = await knowledgeStore.deleteKnowledge(req.params.id);
+        res.status(deleted ? 200 : 404).json(deleted ? { status: 'deleted' } : { error: 'Data tidak ditemukan.' });
+    } catch (error) {
+        console.error(`[KNOWLEDGE] Gagal menghapus data: ${error.message}`);
+        res.status(400).json({ error: error.message });
+    }
+});
 
 // Fungsi helper untuk memuat fungsi dari folder skills
 function getToolsForAgent(agentName) {
@@ -181,6 +227,11 @@ app.post('/api/chat', requireApiKey, async (req, res) => {
 // Menjalankan server
 app.listen(config.port, '0.0.0.0', () => {
     console.log(`[API] TREM-KU Agent API aktif pada port ${config.port}.`);
+    if (config.knowledgeAdminKeySource === 'generated_file') {
+        console.warn('[SECURITY] Knowledge admin key dibaca dari volume persisten data/knowledge_admin.key.');
+    } else if (config.knowledgeAdminKeySource === 'ephemeral') {
+        console.warn('[SECURITY] Folder data tidak dapat ditulis; knowledge admin key hanya berlaku sampai service restart.');
+    }
 });
 
 heartbeat.startHeartbeat(mqttService.getFleetStatus);
